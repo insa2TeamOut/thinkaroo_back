@@ -7,11 +7,20 @@ import logging
 import json
 import re
 import base64
+from fastapi.middleware.cors import CORSMiddleware
 
 # GPT-4 API 키 설정
 openai.api_key = ""
 app = FastAPI()
 logging.basicConfig(level="DEBUG")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.post("/make_quiz.openai.azure.com/")
@@ -22,6 +31,7 @@ async def make_quiz(difficulty: str = Form(...), subject: str = Form(...), conte
             messages=[
                 {"role": "user", "content": "과목이 " + subject + "에서"
                                             + difficulty + "의 수준으로 " + content + " 이 개념이 중점인 문제를 하나 만들어줘."
+                                            + " 풀이와 정답은 알려주지 말고 문제만 알려줘."
                                             + " 결과는 반드시 한국어로 나오게 해야해"
                  },
             ],
@@ -39,14 +49,12 @@ async def make_quiz(difficulty: str = Form(...), subject: str = Form(...), conte
 
 
 @app.post("/check_answer.openai.azure.com/")
-async def evaluate_solution(file: UploadFile = File(...), text: str = Form(...)):
+async def evaluate_solution(file: str = Form(...), text: str = Form(...)):
     try:
+        image_data = base64.b64decode(file.split(",")[1])
+        filename = f"{str(uuid.uuid4())}.jpg"
 
         UPLOAD_DIR = "./img"
-        image_data = await file.read()
-        filename = f"{str(uuid.uuid4())}.jpg"  # uuid로 유니크한 파일명으로 변경
-
-        # 이미지 저장
         os.makedirs(UPLOAD_DIR, exist_ok=True)
         with open(os.path.join(UPLOAD_DIR, filename), "wb") as fp:
             fp.write(image_data)
@@ -60,14 +68,12 @@ async def evaluate_solution(file: UploadFile = File(...), text: str = Form(...))
         image_path = "./img/" + filename
         base64_image = encode_image(image_path)
 
-        # GPT-4 API 첫 번째 함수 호출
         gpt_response_editing = openai.ChatCompletion.create(
             model="gpt-4-turbo",
             messages=[
                 {"role": "user", "content": text},
-                {"role": "system",
-                 "content": [{"type": "image_url", "image_url": {"url": f"data:image/jpg;base64,{base64_image}"}}]},
-                {"role": "system", "content": "문제의 해설을 이용하여 이미지의 해설을 첨삭 해줘. 첨삭의 결과는 반드시 한국어야 만해."}
+                {"role": "system", "content": [{"type": "image_url", "image_url": {"url": f"data:image/jpg;base64,{base64_image}"}}]},
+                {"role": "system", "content": "문제의 해설을 이용하여 이미지의 해설을 첨삭 해줘. 첨삭의 결과는 반드시 한국어야만 해."}
             ],
             max_tokens=4000,
             presence_penalty=0,
@@ -75,13 +81,11 @@ async def evaluate_solution(file: UploadFile = File(...), text: str = Form(...))
             temperature=1,
         )
 
-        # GPT-4 API 두 번째 함수 호출
         gpt_response_choice_answer = openai.ChatCompletion.create(
             model="gpt-4-turbo",
             messages=[
                 {"role": "user", "content": text},
-                {"role": "system",
-                 "content": [{"type": "image_url", "image_url": {"url": f"data:image/jpg;base64,{base64_image}"}}]},
+                {"role": "system", "content": [{"type": "image_url", "image_url": {"url": f"data:image/jpg;base64,{base64_image}"}}]},
                 {"role": "system", "content": "문제의 정답과 이미지의 답을 비교하여 맞는지 확인 해줘."}
             ],
             functions=[
@@ -121,7 +125,6 @@ async def evaluate_solution(file: UploadFile = File(...), text: str = Form(...))
         os.remove("./img/" + filename)
         logging.info(filename)
 
-        # 결과 반환
         return {
             "filename": filename,
             "editing_result": gpt_response_editing.choices[0].message.content,
