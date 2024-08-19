@@ -49,7 +49,7 @@ async def make_quiz(difficulty: str = Form(...), subject: str = Form(...), conte
 
 
 @app.post("/check_answer.openai.azure.com/")
-async def evaluate_solution(file: str = Form(...), text: str = Form(...)):
+async def evaluate_solution(file: str = Form(...), text: str = Form(...), difficulty: str = Form(...)):
     try:
         image_data = base64.b64decode(file.split(",")[1])
         filename = f"{str(uuid.uuid4())}.jpg"
@@ -73,7 +73,7 @@ async def evaluate_solution(file: str = Form(...), text: str = Form(...)):
             messages=[
                 {"role": "user", "content": text},
                 {"role": "system", "content": [{"type": "image_url", "image_url": {"url": f"data:image/jpg;base64,{base64_image}"}}]},
-                {"role": "system", "content": "문제의 해설을 이용하여 이미지의 해설을 첨삭 해줘. 첨삭의 결과는 반드시 한국어야만 해."}
+                {"role": "system", "content": "문제의 해설을 이용하여 이미지에 있는 사용자 해설을 " + difficulty + " 수준에 맞추어 수정 해줘. 첨삭의 결과는 반드시 한국어야만 해."}
             ],
             max_tokens=4000,
             presence_penalty=0,
@@ -123,7 +123,7 @@ async def evaluate_solution(file: str = Form(...), text: str = Form(...)):
             returnCheck = "X"
 
         os.remove("./img/" + filename)
-        logging.info(filename)
+        logging.warning(filename)
 
         return {
             "filename": filename,
