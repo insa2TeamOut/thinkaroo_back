@@ -72,8 +72,10 @@ async def evaluate_solution(file: str = Form(...), text: str = Form(...), diffic
             model="gpt-4-turbo",
             messages=[
                 {"role": "user", "content": text},
-                {"role": "system", "content": [{"type": "image_url", "image_url": {"url": f"data:image/jpg;base64,{base64_image}"}}]},
-                {"role": "system", "content": "문제의 해설을 이용하여 이미지에 있는 사용자 해설을 " + difficulty + " 수준에 맞추어 수정 해줘. 첨삭의 결과는 반드시 한국어야만 해."}
+                {"role": "user",
+                 "content": [{"type": "image_url", "image_url": {"url": f"data:image/jpg;base64,{base64_image}"}}]},
+                {"role": "system",
+                 "content": "문제의 해설을 이용하여 이미지에 있는 사용자 풀이를 " + difficulty + " 수준에 맞추어 수정 해줘. 첨삭의 결과는 반드시 한국어야만 해."}
             ],
             max_tokens=4000,
             presence_penalty=0,
@@ -85,23 +87,25 @@ async def evaluate_solution(file: str = Form(...), text: str = Form(...), diffic
             model="gpt-4-turbo",
             messages=[
                 {"role": "user", "content": text},
-                {"role": "system", "content": [{"type": "image_url", "image_url": {"url": f"data:image/jpg;base64,{base64_image}"}}]},
-                {"role": "system", "content": "문제의 정답과 이미지의 답을 비교하여 맞는지 확인 해줘."}
+                {"role": "user",
+                 "content": [{"type": "image_url", "image_url": {"url": f"data:image/jpg;base64,{base64_image}"}}]},
+                {"role": "system", "content": "문제의 정답과 이미지에 있는 답을 비교하여 맞는지 확인 해줘. 결과는 틀리면 X, 맞으면 O로만 나와야 해."}
             ],
             functions=[
                 {
                     "name": "choice_answer",
-                    "description": "이미지에서 사용자의 정답이 문제의 정답과 같은지 비교합니다.",
+                    "description": "문제의 정답과 이미지에 있는 답을 비교하여 맞는지 확인 해줘.",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "recommend": {
                                 "type": "array",
-                                "description": "이미지에서 사용자의 정답이 문제의 정답과 같은지 비교합니다.",
+                                "description": "문제의 정답과 이미지에 있는 답을 비교하여 맞는지 확인 해줘.",
                                 "items": {
                                     "type": "string",
                                     "enum": ["X", "O"],
                                 },
+                                "required": ["Check the answer"],
                                 "minItems": 1,
                                 "maxItems": 1,
                             },
@@ -122,7 +126,7 @@ async def evaluate_solution(file: str = Form(...), text: str = Form(...), diffic
         if "X" in data.get("recommend", []):
             returnCheck = "X"
 
-        os.remove("./img/" + filename)
+        # os.remove("./img/" + filename)
         logging.warning(filename)
 
         return {
